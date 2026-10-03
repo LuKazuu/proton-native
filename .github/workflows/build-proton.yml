@@ -51,6 +51,10 @@ jobs:
           cp -r proton-wine-p11/patches        wine-src/
           cp -r proton-wine-p11/build-scripts   wine-src/
           cp -r proton-wine-p11/android         wine-src/
+          # Ensure all shell scripts are executable (zip extraction / Windows
+          # git clients can lose the +x bit during transit).
+          chmod +x wine-src/build-scripts/*.sh
+          chmod +x wine-src/android/android_sysvshm/*.sh
           # Sanity check overlay.
           ls -la wine-src/patches wine-src/build-scripts wine-src/android | head -20
 

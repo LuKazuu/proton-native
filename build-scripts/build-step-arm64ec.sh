@@ -77,7 +77,7 @@ for arg in "$@"; do
       PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
       if [ -d "$PROJECT_ROOT/android/android_sysvshm" ]; then
         echo "Building android_sysvshm..."
-        ( cd "$PROJECT_ROOT/android/android_sysvshm" && ./build-aarch64.sh )
+        ( cd "$PROJECT_ROOT/android/android_sysvshm" && bash ./build-aarch64.sh )
         if [ $? -eq 0 ]; then
           mkdir -p "$deps/lib"
           cp "$PROJECT_ROOT/android/android_sysvshm/build-aarch64/libandroid-sysvshm.so" "$deps/lib/"
@@ -180,6 +180,8 @@ for arg in "$@"; do
         "common/server_esync_h.patch"
 
         # ESYNC integration into the sync dispatch
+        "common/server_protocol_def.patch"
+        "common/server_main_c.patch"
         "common/dlls_ntdll_makefile_in.patch"
         "common/dlls_ntdll_unix_sync_c.patch"
         "common/server_makefile_in.patch"
