@@ -253,7 +253,12 @@ for arg in "$@"; do
       )
 
       for patch in "${PATCHES[@]}"; do
-        git apply "./patches/$patch"
+        # Skip patches already applied (e.g. server_protocol_def.patch is
+        # pre-applied before autogen.sh in the workflow so the generated
+        # server_protocol.h picks up the ESYNC enum).
+        if git apply --check "./patches/$patch" 2>/dev/null; then
+          git apply "./patches/$patch"
+        fi
       done
       ;;
 

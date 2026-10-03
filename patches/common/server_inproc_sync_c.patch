@@ -174,9 +174,9 @@ index a7020ef8fcd..497e9a94f75 100644
 -    else if (do_fsync()) reply->fsync_shm_idx = fsync_grab_shm_idx( fd );
 -    else send_client_fd( current->process, fd, req->handle );
 +    if ((fd = get_obj_inproc_sync( obj, &reply->type, &esync_shm_idx )) < 0) set_error( STATUS_NOT_IMPLEMENTED );
-+    else if (do_fsync()) reply->sync_shm_idx = fsync_grab_shm_idx( fd );
++    else if (do_fsync()) reply->fsync_shm_idx = fsync_grab_shm_idx( fd );
 +    else if (do_esync()) {
-+        reply->sync_shm_idx = esync_shm_idx;
++        reply->fsync_shm_idx = esync_shm_idx;
 +        send_client_fd( current->process, fd, req->handle );
 +    }
 +    else

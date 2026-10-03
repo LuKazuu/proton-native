@@ -136,6 +136,14 @@ jobs:
           restore-keys: |
             ccache-p11-esync-${{ matrix.arch }}-
 
+      # Apply the server_protocol.def patch BEFORE autogen.sh, so that the
+      # generated include/wine/server_protocol.h picks up the enum esync_type
+      # + ESYNC_USED_BY_SERVER + sync_shm_idx renames. Applying it later
+      # (in --configure) leaves the generated header stale and breaks the build.
+      - name: Pre-apply server_protocol.def patch
+        working-directory: wine-src
+        run: git apply ./patches/common/server_protocol_def.patch
+
       - name: Run autogen.sh
         working-directory: wine-src
         run: bash autogen.sh
@@ -145,7 +153,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: wine-src/wine-tools
-          key: wine-tools-esync-${{ hashFiles('wine-src/configure.ac', 'wine-src/configure') }}
+          # Cache key includes server_protocol.def so a change to the ESYNC
+          # enum definition invalidates the cache and forces a rebuild.
+          key: wine-tools-esync-v2-${{ hashFiles('wine-src/configure.ac', 'wine-src/configure', 'wine-src/server/protocol.def') }}
 
       - name: Build wine-tools (step 0)
         if: steps.cache-wine-tools.outputs.cache-hit != 'true'
