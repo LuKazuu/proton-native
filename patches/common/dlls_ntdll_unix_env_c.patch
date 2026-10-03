@@ -1,5 +1,5 @@
 diff --git a/dlls/ntdll/unix/env.c b/dlls/ntdll/unix/env.c
-index 042daa2..cdac193 100644
+index 042daa2..8c0dcae 100644
 --- a/dlls/ntdll/unix/env.c
 +++ b/dlls/ntdll/unix/env.c
 @@ -85,6 +85,43 @@ static WCHAR *nt_data_dir;
@@ -104,12 +104,14 @@ index 042daa2..cdac193 100644
  
      if (main_argc > 1 && (
              strstr(main_argv[1], "start_protected_game.exe")
-@@ -752,10 +813,18 @@ static void init_locale(void)
+@@ -751,11 +812,20 @@ static void init_locale(void)
+        ))
      {
          FIXME( "HACK setting EN locale.\n" );
-         messages = "en-US";
 +#ifdef __ANDROID__
 +        messages_android = "en-US";
++#else
+         messages = "en-US";
 +#endif
      }
  
