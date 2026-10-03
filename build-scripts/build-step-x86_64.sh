@@ -1,6 +1,6 @@
 #!/bin/bash
 # Cross-build Proton 11.0 (x86_64 + i386) for Android.
-# ESYNC + FSYNC. Output: a .wcp package for GameNative/Winlator.
+# ESYNC + FSYNC. Output: a zstd-compressed .wcp for GameNative/Winlator.
 
 set -e
 
@@ -48,13 +48,15 @@ export ACLOCAL_PATH="$deps/lib/aclocal:$deps/share/aclocal"
 export CPPFLAGS="--sysroot=$TOOLCHAIN/../sysroot -idirafter $deps/include"
 
 # -g1 keeps line-tables so crash backtraces show file:line.
+# -Oz optimizes for size (same runtime perf as -O2 on Wine's IPC/syscall workload).
+# -ffunction-sections -fdata-sections + --gc-sections drop dead code at link time.
 # ANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES + max-page-size=16384 give 16KB page
 # support on a single SDK 28 target.
-export C_OPTS="-g1 -O2 -DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES -march=x86-64 -mtune=generic -Wno-declaration-after-statement -Wno-implicit-function-declaration -Wno-int-conversion"
+export C_OPTS="-g1 -Oz -ffunction-sections -fdata-sections -DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES -march=x86-64 -mtune=generic -Wno-declaration-after-statement -Wno-implicit-function-declaration -Wno-int-conversion"
 export CFLAGS="$C_OPTS"
 export CXXFLAGS="$C_OPTS"
-export CROSSCFLAGS="-g1 -O2"
-export LDFLAGS="-L$deps/lib -Wl,-rpath=$RUNTIME_PATH/lib -Wl,-z,max-page-size=16384"
+export CROSSCFLAGS="-g1 -Oz -ffunction-sections -fdata-sections"
+export LDFLAGS="-L$deps/lib -Wl,-rpath=$RUNTIME_PATH/lib -Wl,-z,max-page-size=16384 -Wl,--gc-sections -Wl,--icf=safe -Wl,--rosegment"
 
 export FREETYPE_CFLAGS="-I$deps/include/freetype2"
 export PULSE_CFLAGS="-I$deps/include/pulse"
@@ -109,7 +111,7 @@ for arg in "$@"; do
         --without-coreaudio \
         --without-cups \
         --without-dbus \
-        --without-ffmpeg \
+        --with-ffmpeg \
         --with-fontconfig \
         --with-freetype \
         --without-gcrypt \
@@ -262,10 +264,11 @@ for arg in "$@"; do
       ;;
 
     --package-wcp)
-      # Package $OUTPUT_DIR as a .wcp (uncompressed tar).
+      # Package $OUTPUT_DIR as a .wcp (zstd-compressed tar).
       # Layout: profile.json, bin/, lib/, share/, prefixPack.txz.
       # The inner prefixPack.txz is xz-compressed pre-built payload from
-      # GameNative/bionic-prefix-files; the outer .wcp is plain tar.
+      # GameNative/bionic-prefix-files; the outer .wcp is zstd-compressed
+      # for fast in-app install (GameNative/Winlator expect this format).
       WCP_NAME="${WCP_NAME:-proton-11.0-x86_64.wcp}"
       WCP_TYPE="${WCP_TYPE:-Proton}"
       ARCH_NAME="x86_64"
@@ -322,8 +325,8 @@ EOF
 
       out="$(dirname "$OUTPUT_DIR")/$WCP_NAME"
       rm -f "$out"
-      # Plain tar -> .wcp.
-      tar -C "$STAGING" -cf "$out" profile.json prefixPack.txz bin lib share
+      # zstd-compressed tar -> .wcp. -T0 = all cores, -19 = high ratio (small download).
+      tar -C "$STAGING" -I 'zstd -T0 -19' -cf "$out" profile.json prefixPack.txz bin lib share
       rm -rf "$STAGING"
       trap - EXIT
       echo "WCP package: $out ($(du -m "$out" | cut -f1)MB)"

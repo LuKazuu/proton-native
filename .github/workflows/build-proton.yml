@@ -2,7 +2,7 @@
 #
 # Treats the repo as a patch overlay: checks out upstream Wine 11.0,
 # overlays patches/ + build-scripts/ + android/ from this repo, runs the build.
-# Output: a single uncompressed .wcp tar per architecture.
+# Output: a zstd-compressed .wcp tar per architecture.
 name: Build Proton Wine (ESYNC, SDK 28, 16KB pages)
 
 on:
@@ -11,6 +11,10 @@ on:
   pull_request:
     branches: [ main, master ]
   workflow_dispatch:
+
+# Required for softprops/action-gh-release to create releases.
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -76,6 +80,7 @@ jobs:
             libtool \
             pkg-config \
             ccache \
+            zstd \
             mingw-w64 \
             gcc-multilib \
             g++-multilib \
@@ -282,8 +287,9 @@ jobs:
             - `WINEESYNC=1` enables ESYNC (requires raised `ulimit -n`, ~1M FDs).
 
             ## Packaging
-            Plain tar `.wcp`. The inner `prefixPack.txz` is xz-compressed
-            (pre-built payload from `GameNative/bionic-prefix-files`).
+            Zstd-compressed tar `.wcp` (fast in-app install). The inner
+            `prefixPack.txz` is xz-compressed (pre-built payload from
+            `GameNative/bionic-prefix-files`).
 
             ## WCP Files
             - `proton-11.0-x86_64.wcp` — for GameNative / Winlator
