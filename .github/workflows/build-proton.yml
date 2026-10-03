@@ -1,8 +1,5 @@
-# Build Proton Wine 11.0 for Android, x86_64 + arm64ec.
-#
-# Treats the repo as a patch overlay: checks out upstream Wine 11.0,
-# overlays patches/ + build-scripts/ + android/ from this repo, runs the build.
-# Output: a zstd-compressed .wcp tar per architecture.
+# Build Proton Wine 11.0 for Android (arm64ec).
+# Patch overlay on upstream Wine 11.0. Output: a zstd-compressed .wcp tar.
 name: Build Proton Wine (ESYNC, SDK 28, 16KB pages)
 
 on:
@@ -12,7 +9,7 @@ on:
     branches: [ main, master ]
   workflow_dispatch:
 
-# Required for softprops/action-gh-release to create releases.
+# Required for softprops/action-gh-release.
 permissions:
   contents: write
 
@@ -21,7 +18,7 @@ jobs:
     runs-on: ubuntu-24.04
     strategy:
       matrix:
-        arch: [x86_64, aarch64]
+        arch: [aarch64]
       fail-fast: false
 
     steps:
@@ -33,13 +30,13 @@ jobs:
           sudo rm -rf "$AGENT_TOOLSDIRECTORY"
           df -h
 
-      # Check out this patch overlay (patches/, build-scripts/, android/).
+      # Checkout patch overlay (patches/, build-scripts/, android/).
       - name: Checkout patch overlay (this repo)
         uses: actions/checkout@v4
         with:
           path: proton-wine-p11
 
-      # Check out upstream Wine 11.0 (ValveSoftware/wine proton_11.0).
+      # Checkout upstream Wine 11.0 (ValveSoftware/wine proton_11.0).
       - name: Checkout Wine 11.0 source
         uses: actions/checkout@v4
         with:
@@ -48,18 +45,15 @@ jobs:
           path: wine-src
           fetch-depth: 1
 
-      # Overlay patches/, build-scripts/, android/ on top of the Wine source.
-      # Build scripts expect to run from the Wine source root.
+      # Overlay patches/, build-scripts/, android/ onto Wine source.
       - name: Overlay patches onto Wine source
         run: |
           cp -r proton-wine-p11/patches        wine-src/
           cp -r proton-wine-p11/build-scripts   wine-src/
           cp -r proton-wine-p11/android         wine-src/
-          # Ensure all shell scripts are executable (zip extraction / Windows
-          # git clients can lose the +x bit during transit).
+          # Ensure shell scripts are executable.
           chmod +x wine-src/build-scripts/*.sh
           chmod +x wine-src/android/android_sysvshm/*.sh
-          # Sanity check overlay.
           ls -la wine-src/patches wine-src/build-scripts wine-src/android | head -20
 
       - name: Set up build environment
@@ -119,20 +113,19 @@ jobs:
         id: cache-llvm-mingw
         uses: actions/cache@v4
         with:
-          path: ~/toolchains/llvm-mingw-20250920-ucrt-ubuntu-22.04-x86_64
+          path: ~/toolchains
           key: bylaws-llvm-mingw-20250920
 
       - name: Set up LLVM MinGW toolchain
         if: steps.cache-llvm-mingw.outputs.cache-hit != 'true'
         run: |
+          HOST_ARCH=$(uname -m)
           mkdir -p $HOME/toolchains
           cd $HOME/toolchains
-          wget -q https://github.com/bylaws/llvm-mingw/releases/download/20250920/llvm-mingw-20250920-ucrt-ubuntu-22.04-x86_64.tar.xz
-          tar -xf llvm-mingw-20250920-ucrt-ubuntu-22.04-x86_64.tar.xz
+          wget -q "https://github.com/bylaws/llvm-mingw/releases/download/20250920/llvm-mingw-20250920-ucrt-ubuntu-22.04-${HOST_ARCH}.tar.xz"
+          tar -xf "llvm-mingw-20250920-ucrt-ubuntu-22.04-${HOST_ARCH}.tar.xz"
 
-      # ccache — caches compiled objects across runs (per-arch, rolling
-      # restore-keys). The build scripts wrap clang/clang++ in ccache
-      # automatically when it is on PATH.
+      # ccache: caches compiled objects across runs (per-arch, rolling restore-keys).
       - name: Cache ccache (${{ matrix.arch }})
         uses: actions/cache@v4
         with:
@@ -141,10 +134,8 @@ jobs:
           restore-keys: |
             ccache-p11-esync-${{ matrix.arch }}-
 
-      # Apply the server_protocol.def patch BEFORE autogen.sh, so that the
-      # generated include/wine/server_protocol.h picks up the enum esync_type
-      # + ESYNC_USED_BY_SERVER + sync_shm_idx renames. Applying it later
-      # (in --configure) leaves the generated header stale and breaks the build.
+      # Pre-apply server_protocol.def before autogen.sh so the generated
+      # server_protocol.h picks up the ESYNC enum + sync_shm_idx renames.
       - name: Pre-apply server_protocol.def patch
         working-directory: wine-src
         run: git apply ./patches/common/server_protocol_def.patch
@@ -158,8 +149,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: wine-src/wine-tools
-          # Cache key includes server_protocol.def so a change to the ESYNC
-          # enum definition invalidates the cache and forces a rebuild.
+          # Cache key includes server_protocol.def so ESYNC enum changes invalidate.
           key: wine-tools-esync-v2-${{ hashFiles('wine-src/configure.ac', 'wine-src/configure', 'wine-src/server/protocol.def') }}
 
       - name: Build wine-tools (step 0)
@@ -168,27 +158,16 @@ jobs:
         run: bash build-scripts/build-step0.sh
 
       - name: Build sysvshm library for ${{ matrix.arch }}
-        if: matrix.arch == 'aarch64'
         working-directory: wine-src
         run: bash build-scripts/build-step-arm64ec.sh --build-sysvshm
 
       - name: Configure build for ${{ matrix.arch }}
         working-directory: wine-src
-        run: |
-          if [ "${{ matrix.arch }}" == "x86_64" ]; then
-            bash build-scripts/build-step-x86_64.sh --configure
-          else
-            bash build-scripts/build-step-arm64ec.sh --configure
-          fi
+        run: bash build-scripts/build-step-arm64ec.sh --configure
 
       - name: Build Proton for ${{ matrix.arch }}
         working-directory: wine-src
-        run: |
-          if [ "${{ matrix.arch }}" == "x86_64" ]; then
-            bash build-scripts/build-step-x86_64.sh --build
-          else
-            bash build-scripts/build-step-arm64ec.sh --build
-          fi
+        run: bash build-scripts/build-step-arm64ec.sh --build
 
       - name: ccache stats (${{ matrix.arch }})
         if: always()
@@ -197,23 +176,13 @@ jobs:
       - name: Install Proton for ${{ matrix.arch }}
         working-directory: wine-src
         env:
-          # Output dir inside the workspace so the .wcp lands in
-          # $GITHUB_WORKSPACE/ after --package-wcp.
+          # Output dir inside the workspace so .wcp lands in $GITHUB_WORKSPACE.
           OUTPUT_DIR: ${{ github.workspace }}/compiled-files-${{ matrix.arch }}
-        run: |
-          if [ "${{ matrix.arch }}" == "x86_64" ]; then
-            bash build-scripts/build-step-x86_64.sh --install
-          else
-            bash build-scripts/build-step-arm64ec.sh --install
-          fi
+        run: bash build-scripts/build-step-arm64ec.sh --install
 
       - name: Download prefixPack.txz for ${{ matrix.arch }}
         run: |
-          if [ "${{ matrix.arch }}" == "x86_64" ]; then
-            wget -q https://github.com/GameNative/bionic-prefix-files/raw/main/prefixPack-x86_64-11.txz -O $GITHUB_WORKSPACE/prefixPack.txz
-          else
-            wget -q https://github.com/GameNative/bionic-prefix-files/raw/main/prefixPack-arm64ec-11.txz -O $GITHUB_WORKSPACE/prefixPack.txz
-          fi
+          wget -q https://github.com/GameNative/bionic-prefix-files/raw/main/prefixPack-arm64ec-11.txz -O $GITHUB_WORKSPACE/prefixPack.txz
 
       - name: Package .wcp for ${{ matrix.arch }}
         working-directory: wine-src
@@ -221,11 +190,7 @@ jobs:
           OUTPUT_DIR: ${{ github.workspace }}/compiled-files-${{ matrix.arch }}
           WCP_PREFIX_PACK: ${{ github.workspace }}/prefixPack.txz
         run: |
-          if [ "${{ matrix.arch }}" == "x86_64" ]; then
-            bash build-scripts/build-step-x86_64.sh --package-wcp
-          else
-            bash build-scripts/build-step-arm64ec.sh --package-wcp
-          fi
+          bash build-scripts/build-step-arm64ec.sh --package-wcp
           ls -lh $GITHUB_WORKSPACE/proton-11.0-*.wcp
 
       - name: Upload Proton .wcp for ${{ matrix.arch }}
@@ -275,7 +240,6 @@ jobs:
             Built from commit: ${{ github.sha }}
 
             ## Architectures
-            - x86_64 (Intel/AMD 64-bit)
             - arm64ec (ARM64EC)
 
             Single SDK 28 build with 16KB page size support (works on Android 9+ and Android 15+).
@@ -292,7 +256,6 @@ jobs:
             `GameNative/bionic-prefix-files`).
 
             ## WCP Files
-            - `proton-11.0-x86_64.wcp` — for GameNative / Winlator
             - `proton-11.0-arm64ec.wcp` — for GameNative / Winlator
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

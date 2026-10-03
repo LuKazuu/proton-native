@@ -1,12 +1,13 @@
-TOOLCHAIN ?= $(HOME)/Android/android-ndk-r28c/toolchains/llvm/prebuilt/linux-x86_64/bin
-TARGET ?= x86_64-linux-android28
+HOST_ARCH ?= $(shell uname -m)
+TOOLCHAIN ?= $(HOME)/Android/android-ndk-r28c/toolchains/llvm/prebuilt/linux-$(HOST_ARCH)/bin
+TARGET ?= aarch64-linux-android28
 
 CC = $(TOOLCHAIN)/$(TARGET)-clang
 AR = $(TOOLCHAIN)/llvm-ar
 RANLIB = $(TOOLCHAIN)/llvm-ranlib
 
 CFLAGS = -Wall -std=gnu99 -shared -fPIC -I.
-OUTPUT_DIR = build-x86_64
+OUTPUT_DIR = build-aarch64
 OUTPUT = $(OUTPUT_DIR)/libandroid-sysvshm.so
 
 SRC = android_sysvshm.c
@@ -20,7 +21,7 @@ $(OUTPUT_DIR):
 	mkdir -p $(OUTPUT_DIR)
 
 $(OUTPUT): $(SRC) $(HEADERS) | $(OUTPUT_DIR)
-	@echo "Building android_sysvshm for x86_64..."
+	@echo "Building android_sysvshm for aarch64..."
 	$(CC) $(CFLAGS) -o $@ $(SRC)
 	@echo "Build successful! Output: $@"
 	@ls -lh $@

@@ -13,8 +13,8 @@ export deps="${deps:-$HOME/termuxfs/aarch64/data/data/com.termux/files/usr}"
 export RUNTIME_PATH="/data/data/com.termux/files/usr"
 export install_dir="$deps/../opt/wine"
 
-export TOOLCHAIN="${TOOLCHAIN:-$HOME/Android/Sdk/ndk/27.3.13750724/toolchains/llvm/prebuilt/linux-x86_64/bin}"
-export LLVM_MINGW_TOOLCHAIN="${LLVM_MINGW_TOOLCHAIN:-$HOME/toolchains/llvm-mingw-20250920-ucrt-ubuntu-22.04-x86_64/bin}"
+export TOOLCHAIN="${TOOLCHAIN:-$HOME/Android/Sdk/ndk/27.3.13750724/toolchains/llvm/prebuilt/linux-$(uname -m)/bin}"
+export LLVM_MINGW_TOOLCHAIN="${LLVM_MINGW_TOOLCHAIN:-$HOME/toolchains/llvm-mingw-20250920-ucrt-ubuntu-22.04-$(uname -m)/bin}"
 export TARGET=aarch64-linux-android28
 export PATH="$LLVM_MINGW_TOOLCHAIN:$PATH"
 
@@ -40,18 +40,14 @@ export RANLIB="$TOOLCHAIN/llvm-ranlib"
 export STRIP="$TOOLCHAIN/llvm-strip"
 export DLLTOOL="$LLVM_MINGW_TOOLCHAIN/llvm-dlltool"
 
-# Wine's WINE_CHECK_HOST_TOOL skips the non-prefixed pkg-config fallback;
-# point PKG_CONFIG at the host tool explicitly.
+# Point PKG_CONFIG at the host tool explicitly (Wine skips the fallback).
 export PKG_CONFIG="${PKG_CONFIG:-$(command -v pkg-config)}"
 export PKG_CONFIG_LIBDIR="$deps/lib/pkgconfig:$deps/share/pkgconfig"
 export ACLOCAL_PATH="$deps/lib/aclocal:$deps/share/aclocal"
 export CPPFLAGS="--sysroot=$TOOLCHAIN/../sysroot -idirafter $deps/include"
 
-# -g1 keeps line-tables so crash backtraces show file:line.
-# -Oz optimizes for size (same runtime perf as -O2 on Wine's IPC/syscall workload).
-# -ffunction-sections -fdata-sections + --gc-sections drop dead code at link time.
-# ANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES + max-page-size=16384 give 16KB page
-# support on a single SDK 28 target.
+# -g1: line-tables for backtraces. -Oz: size. --gc-sections: dead code drop.
+# 16KB page support via ANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES + max-page-size=16384.
 export C_OPTS="-g1 -Oz -ffunction-sections -fdata-sections -DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES -Wno-declaration-after-statement -Wno-implicit-function-declaration -Wno-int-conversion"
 export CFLAGS="$C_OPTS"
 export CXXFLAGS="$C_OPTS"
@@ -74,7 +70,7 @@ export FFMPEG_LIBS="-L$deps/lib -lavutil -lavcodec -lavformat"
 for arg in "$@"; do
   case "$arg" in
     --build-sysvshm)
-      # Build the android_sysvshm shim (SysV shared memory on Bionic).
+      # Build the android_sysvshm shim.
       SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
       PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
       if [ -d "$PROJECT_ROOT/android/android_sysvshm" ]; then
@@ -190,7 +186,7 @@ for arg in "$@"; do
         "common/server_inproc_sync_c.patch"
         "common/server_thread_c.patch"
 
-        # winedmo: fix ffmpeg API compatibility (remove deprecated BSF)
+        # winedmo: ffmpeg API compat fix
         "common/dlls_winedmo_ffmpeg_compat.patch"
 
         # winex11 driver
@@ -219,6 +215,17 @@ for arg in "$@"; do
 
         # OpenGL32
         "common/dlls_opengl32_unix_wgl_c.patch"
+        # OpenGL32 wow64: always disable the Vulkan buffer-storage path on
+        # this Android fork. On stacks (Zink-over-Vulkan on Termux-X11)
+        # where vkMapMemory2KHR with VK_MEMORY_MAP_PLACED_BIT_EXT returns
+        # a host_ptr different from the requested pPlacedAddress, 32-bit
+        # apps crash in wow64_map_buffer() with:
+        #   assertion "buffer->host_ptr == buffer->vm_ptr" failed
+        # the first time wined3d's D3D7 vertex buffer pool is persistently
+        # mapped via glBufferStorage + glMapBuffer. 64-bit contexts are
+        # unaffected (the Vulkan buffer-storage branch is only entered on
+        # wow64 in make_context_current()). Always-on, no env var gate.
+        "common/dlls_opengl32_unix_wgl_c_vk_buffer_storage_fallback.patch"
 
         # Explorer desktop
         "common/programs_explorer_desktop_c.patch"
@@ -243,7 +250,7 @@ for arg in "$@"; do
         "common/dlls_user32_clipboard_c.patch"
         "common/dlls_win32u_clipboard_c.patch"
 
-        # FEX unixlib loader (MemoryWineLoadUnixLibByName)
+        # FEX unixlib loader
         "common/include_winternl_h.patch"
         "common/include_wine_unixlib_h.patch"
         "common/dlls_wow64_virtual_c.patch"
@@ -258,9 +265,7 @@ for arg in "$@"; do
       )
 
       for patch in "${PATCHES[@]}"; do
-        # Skip patches already applied (e.g. server_protocol_def.patch is
-        # pre-applied before autogen.sh in the workflow so the generated
-        # server_protocol.h picks up the ESYNC enum).
+        # Skip already-applied patches.
         if git apply --check "./patches/$patch" 2>/dev/null; then
           git apply "./patches/$patch"
         fi
@@ -270,9 +275,6 @@ for arg in "$@"; do
     --package-wcp)
       # Package $OUTPUT_DIR as a .wcp (zstd-compressed tar).
       # Layout: profile.json, bin/, lib/, share/, prefixPack.txz.
-      # The inner prefixPack.txz is xz-compressed pre-built payload from
-      # GameNative/bionic-prefix-files; the outer .wcp is zstd-compressed
-      # for fast in-app install (GameNative/Winlator expect this format).
       WCP_NAME="${WCP_NAME:-proton-11.0-arm64ec.wcp}"
       WCP_TYPE="${WCP_TYPE:-Proton}"
       ARCH_NAME="arm64ec"
@@ -329,7 +331,7 @@ EOF
 
       out="$(dirname "$OUTPUT_DIR")/$WCP_NAME"
       rm -f "$out"
-      # zstd-compressed tar -> .wcp. -T0 = all cores, -19 = high ratio (small download).
+      # zstd tar -> .wcp. -T0 = all cores, -19 = high ratio.
       tar -C "$STAGING" -I 'zstd -T0 -19' -cf "$out" profile.json prefixPack.txz bin lib share
       rm -rf "$STAGING"
       trap - EXIT
@@ -353,16 +355,14 @@ EOF
       cp -r "$install_dir/lib/wine" "$OUTPUT_DIR/lib"
       cp -r "$install_dir/share/wine" "$OUTPUT_DIR/share"
 
-      # Delete dev artifacts (static libs, def files, headers, man pages)
-      # but KEEP .symtab and .debug_line so WINEDEBUG + crash backtraces
-      # show real function names and file:line.
+      # Remove dev artifacts; keep .symtab + .debug_line for backtraces.
       echo "Removing dev artifacts (static libs, headers, man pages)..."
       find "$OUTPUT_DIR/lib" "$OUTPUT_DIR/bin" -type f \
         \( -name '*.a' -o -name '*.lib' -o -name '*.def' \) -delete 2>/dev/null || true
       rm -rf "$OUTPUT_DIR/include" "$OUTPUT_DIR/share/man" 2>/dev/null || true
       echo "Install complete (no strip, -g1 -O2, full perf)."
 
-      # Symlink the wine loader binaries into the install/bin tree.
+      # Symlink the wine loader binaries.
       ln -sf ../lib/wine/aarch64-unix/wine "$install_dir/bin/wine"
       ln -sf ../lib/wine/aarch64-unix/wine "$OUTPUT_DIR/bin/wine"
       ln -sf ../lib/wine/aarch64-unix/wine-preloader "$OUTPUT_DIR/bin/wine-preloader"

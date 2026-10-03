@@ -2,16 +2,12 @@ diff --git a/dlls/ntdll/unix/loader.c b/dlls/ntdll/unix/loader.c
 index f8aa468..291bf9b 100644
 --- a/dlls/ntdll/unix/loader.c
 +++ b/dlls/ntdll/unix/loader.c
-@@ -340,7 +340,11 @@ static const char *get_pe_dir( WORD machine )
+@@ -340,7 +340,7 @@ static const char *get_pe_dir( WORD machine )
      switch(machine)
      {
      case IMAGE_FILE_MACHINE_I386:  return "/i386-windows";
 -    case IMAGE_FILE_MACHINE_AMD64: return "/x86_64-windows";
-+#ifdef __aarch64__
-+        case IMAGE_FILE_MACHINE_AMD64: return "/aarch64-windows";
-+#else
-+        case IMAGE_FILE_MACHINE_AMD64: return "/x86_64-windows";
-+#endif
++    case IMAGE_FILE_MACHINE_AMD64: return "/aarch64-windows";
      case IMAGE_FILE_MACHINE_ARMNT: return "/arm-windows";
      case IMAGE_FILE_MACHINE_ARM64: return "/aarch64-windows";
      default: return "";
@@ -134,7 +130,7 @@ index f8aa468..291bf9b 100644
 +
 +
  /***************************************************************************
-  *	get_machine_wow64_dir
+  *     get_machine_wow64_dir
   *
 @@ -2451,7 +2548,9 @@ static void start_main_thread(void)
      set_thread_teb( teb );

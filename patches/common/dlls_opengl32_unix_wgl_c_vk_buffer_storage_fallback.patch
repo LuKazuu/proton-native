@@ -1,0 +1,34 @@
+diff --git a/dlls/opengl32/unix_wgl.c b/dlls/opengl32/unix_wgl.c
+index 0ba0282..c7289a8 100644
+--- a/dlls/opengl32/unix_wgl.c
++++ b/dlls/opengl32/unix_wgl.c
+@@ -300,6 +300,26 @@ static BOOL initialize_vk_device( TEB *teb, const struct opengl_context *ctx )
+     static PFN_vkGetPhysicalDeviceProperties2KHR p_vkGetPhysicalDeviceProperties2KHR;
+
+     if (buffers.vk_device) return TRUE; /* already initialized */
++
++    /* Always disable the Vulkan buffer-storage path on this Android fork.
++     *
++     * On stacks where the Vulkan driver advertises VK_EXT_map_memory_placed
++     * (memoryMapPlaced reported as supported by vkGetPhysicalDeviceFeatures2KHR)
++     * but vkMapMemory2KHR with VK_MEMORY_MAP_PLACED_BIT_EXT does not actually
++     * honour pPlacedAddress and returns a different host_ptr, wow64_map_buffer()
++     * hits:
++     *   assertion "buffer->host_ptr == buffer->vm_ptr" failed
++     * the first time a 32-bit app persistently maps a buffer via
++     * glBufferStorage + glMapBuffer (e.g. wined3d's D3D7 vertex buffer pool,
++     * observed as a 64 MiB GL_ARRAY_BUFFER storage). Observed on
++     * Zink-over-a-Vulkan-wrapper (Turnip Adreno) on Termux-X11; the 64-bit
++     * version is unaffected (the wow64 Vulkan buffer path is only entered
++     * under is_wow64() in make_context_current()).
++     *
++     * Returning FALSE here makes make_context_current() fall back to
++     * GL_AMD_pinned_memory (if available) or disable GL_ARB_buffer_storage
++     * entirely, so 32-bit apps use the regular glBufferData + glMapBuffer
++     * copy path. The Vulkan path is a perf optimization; losing it on this
++     * Android fork is acceptable in exchange for 32-bit stability. */
++    return FALSE;
++
+     if (!ctx->extensions[GL_EXT_memory_object_fd] )
+     {
+         TRACE( "GL_EXT_memory_object_fd is not supported\n" );

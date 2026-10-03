@@ -9,10 +9,3 @@ diff --git a/dlls/ntdll/unix/unix_private.h b/dlls/ntdll/unix/unix_private.h
  extern BOOL is_builtin_path( const UNICODE_STRING *path, WORD *machine );
  extern NTSTATUS load_main_exe( UNICODE_STRING *nt_name, USHORT load_machine, void **module );
  extern NTSTATUS load_start_exe( UNICODE_STRING *nt_name, void **module );
-@@ -724,4 +725,6 @@ static inline int is_gdt_sel( WORD sel )
-
- #endif  /* defined(__i386__) || defined(__x86_64__) */
-
-+void DECLSPEC_NOINLINE __wine_dbg_notify_syscall_fault(void);
-+
- #endif /* __NTDLL_UNIX_PRIVATE_H */

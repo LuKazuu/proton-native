@@ -1,7 +1,6 @@
 #!/bin/bash
 
-export TOOLCHAIN=$HOME/Android/android-ndk-r27d/toolchains/llvm/prebuilt/linux-x86_64/bin
-export TOOLCHAIN="$HOME/Android/Sdk/ndk/27.3.13750724/toolchains/llvm/prebuilt/linux-x86_64/bin"
+export TOOLCHAIN="$HOME/Android/Sdk/ndk/27.3.13750724/toolchains/llvm/prebuilt/linux-$(uname -m)/bin"
 export TARGET=aarch64-linux-android28
 
 export CC="$TOOLCHAIN/$TARGET-clang"
@@ -22,7 +21,6 @@ $CC -Wall -std=gnu99 -shared -fPIC \
 
 if [ $? -eq 0 ]; then
     echo "Build successful! Output: $OUTPUT_DIR/libandroid-sysvshm.so"
-    #ls -lh "$OUTPUT_DIR/libandroid-sysvshm.so"
 else
     echo "Build failed!"
     exit 1

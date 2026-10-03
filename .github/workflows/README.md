@@ -1,7 +1,6 @@
 # Proton Wine Build Workflow
 
-`build-proton.yml` builds Proton Wine 11.0 for both `x86_64` and `aarch64`
-(ARM64EC) architectures on GitHub Actions.
+`build-proton.yml` builds Proton Wine 11.0 for `aarch64` (ARM64EC) on GitHub Actions.
 
 The repo is treated as a **patch overlay**:
 
@@ -10,7 +9,7 @@ The repo is treated as a **patch overlay**:
    `proton_11.0` branch).
 3. Overlays `patches/`, `build-scripts/`, `android/` from this repo on top.
 4. Runs the standard build sequence: `autogen.sh` → `build-step0.sh`
-   (host tools) → `--build-sysvshm` (arm64 only) → `--configure` →
+   (host tools) → `--build-sysvshm` → `--configure` →
    `--build` → `--install` → `--package-wcp`.
 
 ## Triggers
@@ -28,9 +27,8 @@ ESYNC + FSYNC only.
 
 ## Output
 
-A single `.wcp` artifact per architecture:
+A single `.wcp` artifact:
 
-- `proton-11.0-x86_64.wcp`
 - `proton-11.0-arm64ec.wcp`
 
 The `.wcp` is an uncompressed tar. The contained `prefixPack.txz` is
@@ -61,13 +59,10 @@ cp -r proton-wine-p11/android         wine-src/
 cd wine-src
 bash autogen.sh
 bash build-scripts/build-step0.sh
-# Then either:
-bash build-scripts/build-step-x86_64.sh --build-sysvshm --configure --build --install --package-wcp
-# Or:
 bash build-scripts/build-step-arm64ec.sh --build-sysvshm --configure --build --install --package-wcp
 ```
 
 You need the Android NDK r27d, LLVM MinGW 2025-09-20 ucrt, and the
-GameNative `termuxfs-{arch}.tar` (see
+GameNative `termuxfs-aarch64.tar` (see
 https://github.com/GameNative/termux-on-gha/releases) extracted to
-`$HOME/termuxfs/{arch}/`. See the main `README.md` for full prerequisites.
+`$HOME/termuxfs/aarch64/`. See the main `README.md` for full prerequisites.
