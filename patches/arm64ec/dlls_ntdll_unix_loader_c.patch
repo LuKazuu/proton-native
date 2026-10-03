@@ -130,7 +130,7 @@ index f8aa468..291bf9b 100644
 +
 +
  /***************************************************************************
-  *     get_machine_wow64_dir
+  *	get_machine_wow64_dir
   *
 @@ -2451,7 +2548,9 @@ static void start_main_thread(void)
      set_thread_teb( teb );
