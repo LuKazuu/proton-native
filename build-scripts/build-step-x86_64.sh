@@ -190,6 +190,9 @@ for arg in "$@"; do
         "common/server_inproc_sync_c.patch"
         "common/server_thread_c.patch"
 
+        # winedmo: fix ffmpeg API compatibility (remove deprecated BSF)
+        "common/dlls_winedmo_ffmpeg_compat.patch"
+
         # winex11 driver
         "common/dlls_winex11_drv_bitblt_c.patch"
         "common/dlls_winex11_drv_desktop_c.patch"
