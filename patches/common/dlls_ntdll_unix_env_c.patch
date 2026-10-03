@@ -1,0 +1,120 @@
+diff --git a/dlls/ntdll/unix/env.c b/dlls/ntdll/unix/env.c
+index 042daa2..f47289d 100644
+--- a/dlls/ntdll/unix/env.c
++++ b/dlls/ntdll/unix/env.c
+@@ -85,6 +85,43 @@ static WCHAR *nt_data_dir;
+ static char system_locale[LOCALE_NAME_MAX_LENGTH];
+ static char user_locale[LOCALE_NAME_MAX_LENGTH];
+ 
++#ifdef __ANDROID__
++static BOOL is_bionic_no_locale( const char *locale )
++{
++    return (!locale || !locale[0]
++            || !strcmp( locale, "C" )
++            || !strcmp( locale, "C.UTF-8" )
++            || !strcmp( locale, "POSIX" ));
++}
++
++static const char *get_android_locale( int category )
++{
++    const char *locale;
++
++    /* LC_ALL takes highest priority */
++    locale = getenv( "LC_ALL" );
++    if (!is_bionic_no_locale( locale )) return locale;
++
++    /* Category-specific variable (LC_CTYPE or LC_MESSAGES) */
++    if (category == LC_CTYPE)
++    {
++        locale = getenv( "LC_CTYPE" );
++        if (!is_bionic_no_locale( locale )) return locale;
++    }
++    else if (category == LC_MESSAGES)
++    {
++        locale = getenv( "LC_MESSAGES" );
++        if (!is_bionic_no_locale( locale )) return locale;
++    }
++
++    /* LANG as final fallback */
++    locale = getenv( "LANG" );
++    if (!is_bionic_no_locale( locale )) return locale;
++
++    return NULL;
++}
++#endif /* __ANDROID__ */
++
+ /* system directory with trailing backslash */
+ const WCHAR system_dir[] = {'\\','?','?','\\','C',':','\\','w','i','n','d','o','w','s','\\',
+                             's','y','s','t','e','m','3','2','\\',0};
+@@ -643,10 +680,18 @@ static BOOL unix_to_win_locale( const char *unix_name, char *win_name )
+     char buffer[LOCALE_NAME_MAX_LENGTH];
+     char *p, *country = NULL, *modifier = NULL;
+ 
+-    if (!unix_name || !unix_name[0] || !strcmp( unix_name, "C" ))
++    if (!unix_name || !unix_name[0] || !strcmp( unix_name, "C" )
++        || !strcmp( unix_name, "C.UTF-8" ) || !strcmp( unix_name, "POSIX" ))
+     {
+         unix_name = getenv( "LC_ALL" );
+-        if (!unix_name || !unix_name[0]) return FALSE;
++        if (!unix_name || !unix_name[0] || !strcmp( unix_name, "C" )
++            || !strcmp( unix_name, "C.UTF-8" ) || !strcmp( unix_name, "POSIX" ))
++        {
++            unix_name = getenv( "LANG" );
++            if (!unix_name || !unix_name[0] || !strcmp( unix_name, "C" )
++                || !strcmp( unix_name, "C.UTF-8" ) || !strcmp( unix_name, "POSIX" ))
++                return FALSE;
++        }
+     }
+ 
+     if (strlen( unix_name ) >= LOCALE_NAME_MAX_LENGTH) return FALSE;
+@@ -733,16 +778,31 @@ static void init_locale(void)
+     const NLS_LOCALE_HEADER *locale_table;
+     const NLS_LOCALE_DATA *locale;
+     char *p;
++#ifdef __ANDROID__
++    const char *all_android, *ctype_android, *messages_android;
++#endif
+ 
++#ifdef __ANDROID__
++    all_android = get_android_locale( LC_ALL );
++    ctype_android = get_android_locale( LC_CTYPE );
++    messages_android = get_android_locale( LC_MESSAGES );
++    if (all_android) setlocale( LC_ALL, all_android );
++#else
+     if (!(all = setlocale( LC_ALL, "" )) && (all = getenv( "LC_ALL" )))
+         FIXME_(nls)( "Failed to set LC_ALL to %s, is the locale supported?\n", debugstr_a(all) );
+     if (!(ctype = setlocale( LC_CTYPE, "" )) && (ctype = getenv( "LC_CTYPE" )))
+         FIXME_(nls)( "Failed to set LC_CTYPE to %s, is the locale supported?\n", debugstr_a(ctype) );
+     if (!(messages = setlocale( LC_MESSAGES, "" )) && (messages = getenv( "LC_MESSAGES" )))
+         FIXME_(nls)( "Failed to set LC_MESSAGES to %s, is the locale supported?\n", debugstr_a(messages) );
++#endif
+ 
++#ifdef __ANDROID__
++    if (!unix_to_win_locale( ctype_android, system_locale )) system_locale[0] = 0;
++    TRACE_(nls)( "Unix LC_CTYPE is %s, setting system locale to %s\n", debugstr_a(ctype_android), debugstr_a(user_locale) );
++#else
+     if (!unix_to_win_locale( ctype, system_locale )) system_locale[0] = 0;
+     TRACE_(nls)( "Unix LC_CTYPE is %s, setting system locale to %s\n", debugstr_a(ctype), debugstr_a(user_locale) );
++#endif
+ 
+     if (main_argc > 1 && (
+             strstr(main_argv[1], "start_protected_game.exe")
+@@ -752,10 +812,18 @@ static void init_locale(void)
+     {
+         FIXME( "HACK setting EN locale.\n" );
+         messages = "en-US";
++#ifdef __ANDROID__
++        messages_android = "en-US";
++#endif
+     }
+ 
++#ifdef __ANDROID__
++    if (!unix_to_win_locale( messages_android, user_locale )) user_locale[0] = 0;
++    TRACE_(nls)( "Unix LC_MESSAGES is %s, user system locale to %s\n", debugstr_a(messages_android), debugstr_a(user_locale) );
++#else
+     if (!unix_to_win_locale( messages, user_locale )) user_locale[0] = 0;
+     TRACE_(nls)( "Unix LC_MESSAGES is %s, user system locale to %s\n", debugstr_a(messages), debugstr_a(user_locale) );
++#endif
+ 
+ #ifdef __APPLE__
+     if (!system_locale[0])
