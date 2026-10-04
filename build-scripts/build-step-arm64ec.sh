@@ -189,6 +189,26 @@ for arg in "$@"; do
         # winedmo: ffmpeg API compat fix
         "common/dlls_winedmo_ffmpeg_compat.patch"
 
+        # winegstreamer + winedmo: strip protonmediaconverter entirely.
+        # Proton's media-converter GStreamer plugin (protonaudioconverter,
+        # protonvideoconverter, protondemuxer) hard-fails its state change
+        # when MEDIACONV_AUDIO_DUMP_FILE / MEDIACONV_VIDEO_DUMP_FILE are
+        # unset -- which is the case for any non-Steam launch (Lutris,
+        # Heroic, command-line). This breaks WMV/WMA video playback in
+        # Kirikiri 2 / KAG-engine visual novels
+        # whose DirectShow VMR9 graph can't construct
+        # its decoder pipeline when the protonmediaconverter elements abort.
+        #
+        # Vanilla Wine doesn't have this plugin at all and plays the same
+        # videos flawlessly. This patch deletes the entire media-converter
+        # directory and all references, making winegstreamer behave like
+        # vanilla Wine for media playback (decodebin -> avdec_wmv2 /
+        # avdec_wmav2 -> videoconvert / audioconvert -> appsink).
+        #
+        # Must come AFTER dlls_winedmo_ffmpeg_compat.patch because both
+        # touch dlls/winedmo/Makefile.in and unix_demuxer.c.
+        "common/strip-protonmediaconverter.patch"
+
         # winex11 driver
         "common/dlls_winex11_drv_bitblt_c.patch"
         "common/dlls_winex11_drv_desktop_c.patch"
