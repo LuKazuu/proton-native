@@ -81,8 +81,19 @@ After `--install` and `--package-wcp`:
 - `$HOME/compiled-files-aarch64/` — installed wine tree (bin/, lib/, share/).
 - `proton-11.0-arm64ec.wcp` — GameNative/Winlator drop-in package.
 
-The `.wcp` is an uncompressed tar. The contained `prefixPack.txz` is
-xz-compressed (pre-built payload from `GameNative/bionic-prefix-files`).
+The `.wcp` is a zstd-compressed tar. The contained `prefixPack.txz` is
+**generated on every build** by `generate_prefix_pack` in
+`build-scripts/build-step-arm64ec.sh` (no external download). It is a minimal
+skeleton: `drive_c` folders plus header-only `system.reg` / `user.reg` /
+`userdef.reg`, and deliberately no `.update-timestamp`. On first launch Wine
+runs `wineboot`, which applies this build's `wine.inf` and rebuilds the
+registry, so it always matches the compiled Wine.
+
+Existing containers keep their old registry (wineboot only merges `wine.inf`
+into it when the file's timestamp changes), so create a **new container** to
+get a clean one.
+
+Set `WCP_PREFIX_PACK=/path/x.txz` to override with a ready-made pack.
 
 ## Sync patch details
 
