@@ -189,21 +189,30 @@ for arg in "$@"; do
         # winedmo: ffmpeg API compat fix
         "common/dlls_winedmo_ffmpeg_compat.patch"
 
-        # winegstreamer + winedmo: strip protonmediaconverter entirely.
+        # winegstreamer + winedmo: strip protonmediaconverter entirely AND
+        # demote all GStreamer GL elements to rank 0.
+        #
+        # Part 1 — strip protonmediaconverter:
         # Proton's media-converter GStreamer plugin (protonaudioconverter,
         # protonvideoconverter, protondemuxer) hard-fails its state change
         # when MEDIACONV_AUDIO_DUMP_FILE / MEDIACONV_VIDEO_DUMP_FILE are
         # unset -- which is the case for any non-Steam launch (Lutris,
         # Heroic, command-line). This breaks WMV/WMA video playback in
-        # Kirikiri 2 / KAG-engine visual novels
-        # whose DirectShow VMR9 graph can't construct
-        # its decoder pipeline when the protonmediaconverter elements abort.
+        # Kirikiri 2 / KAG-engine visual novels whose DirectShow VMR9
+        # graph can't construct its decoder pipeline when the
+        # protonmediaconverter elements abort. Vanilla Wine doesn't have
+        # this plugin at all and plays the same videos flawlessly.
         #
-        # Vanilla Wine doesn't have this plugin at all and plays the same
-        # videos flawlessly. This patch deletes the entire media-converter
-        # directory and all references, making winegstreamer behave like
-        # vanilla Wine for media playback (decodebin -> avdec_wmv2 /
-        # avdec_wmav2 -> videoconvert / audioconvert -> appsink).
+        # Part 2 — demote GL elements to rank 0 (GST_RANK_NONE):
+        # On Android/Winlator, GStreamer's GL elements (glupload,
+        # glcolorconvert, glvideoflip, gltransformation, gldeinterlace,
+        # gldownload) find a broken glcontextglx0 context, fail caps
+        # negotiation, and send reconfigure events. These reconfigure
+        # events cause Kirikiri VNs to tear down their working decoded
+        # DirectShow graph and rebuild with a broken DMO Wrapper path
+        # that stalls (ProcessInput never called, deadlock after 60s).
+        # Demoting GL elements to rank 0 forces decodebin to use CPU-based
+        # videoconvert / audioconvert instead.
         #
         # Must come AFTER dlls_winedmo_ffmpeg_compat.patch because both
         # touch dlls/winedmo/Makefile.in and unix_demuxer.c.

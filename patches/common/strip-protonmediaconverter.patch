@@ -14,19 +14,18 @@ index 1cf228f..2d62723 100644
  	unix_media_type.c \
  	unixlib.c
 diff --git a/dlls/winedmo/unix_demuxer.c b/dlls/winedmo/unix_demuxer.c
-index 4f53b5c..7c40e43 100644
+index 4f53b5c..03f68eb 100644
 --- a/dlls/winedmo/unix_demuxer.c
 +++ b/dlls/winedmo/unix_demuxer.c
-@@ -215,8 +215,6 @@ NTSTATUS demuxer_create( void *arg )
+@@ -215,7 +215,6 @@ NTSTATUS demuxer_create( void *arg )
  
      TRACE( "context %p, url %s, mime %s\n", params->context, debugstr_a(params->url), debugstr_a(params->mime_type) );
  
 -    mediaconv_demuxer_init();
--
+ 
      if (!(demuxer = calloc( 1, sizeof(*demuxer) ))) return STATUS_NO_MEMORY;
      demuxer->stream_context = params->context;
- 
-@@ -224,8 +222,6 @@ NTSTATUS demuxer_create( void *arg )
+@@ -224,8 +223,6 @@ NTSTATUS demuxer_create( void *arg )
      if (!(demuxer->ctx->pb = avio_alloc_context( NULL, 0, 0, params->context, unix_read_callback, NULL, unix_seek_callback ))) goto failed;
  
      if ((ret = avformat_open_input( &demuxer->ctx, NULL, NULL, NULL )) < 0)
@@ -35,7 +34,7 @@ index 4f53b5c..7c40e43 100644
      {
          ERR( "Failed to open input, error %s.\n", debugstr_averr(ret) );
          goto failed;
-@@ -283,7 +279,6 @@ failed:
+@@ -283,7 +280,6 @@ failed:
      free( demuxer->streams );
      free( demuxer );
  
@@ -43,7 +42,7 @@ index 4f53b5c..7c40e43 100644
      return STATUS_UNSUCCESSFUL;
  }
  
-@@ -303,7 +298,6 @@ NTSTATUS demuxer_destroy( void *arg )
+@@ -303,7 +299,6 @@ NTSTATUS demuxer_destroy( void *arg )
      free( demuxer->streams );
      free( demuxer );
  
@@ -5288,19 +5287,44 @@ index 81155b9..9d47d19 100644
 -
  #endif /* __WINE_WINEGSTREAMER_UNIX_PRIVATE_H */
 diff --git a/dlls/winegstreamer/unixlib.c b/dlls/winegstreamer/unixlib.c
-index b259388..381b91b 100644
+index b259388..67798f1 100644
 --- a/dlls/winegstreamer/unixlib.c
 +++ b/dlls/winegstreamer/unixlib.c
-@@ -326,12 +326,6 @@ NTSTATUS wg_init_gstreamer(void *arg)
+@@ -326,10 +326,34 @@ NTSTATUS wg_init_gstreamer(void *arg)
      if (!(gl_display = gst_gl_display_new()))
          GST_ERROR("Failed to create OpenGL display");
  
 -    if (!media_converter_init())
--    {
++    /* Demote all GStreamer GL elements to rank 0 (GST_RANK_NONE) so
++     * decodebin never auto-plugs them. On platforms without working
++     * GLX/EGL (notably Android/Winlator), GL elements fail caps
++     * negotiation and send reconfigure events that cause DirectShow
++     * filter graphs to tear down and rebuild with broken paths.
++     *
++     * CPU-based videoconvert / audioconvert handle the same
++     * conversions without GPU acceleration, which is fine for
++     * Kirikiri VN video (small 480p/720p WMV files). */
+     {
 -        GST_ERROR("Failed to init media converter.");
 -        return STATUS_UNSUCCESSFUL;
--    }
--
-     return STATUS_SUCCESS;
- }
++        static const char *const gl_features[] =
++        {
++            "glupload", "gldownload", "glcolorconvert", "glcolorbalance",
++            "glvideoflip", "gltransformation", "gldeinterlace",
++            "glimagesink", "gleffects", "glfiltercube", "glfilterapp",
++            "glalpha", "glmixerbin", "glvideomixer", "glvideomixerelement",
++        };
++        GstRegistry *registry = gst_registry_get();
++        unsigned int i;
++        for (i = 0; i < ARRAY_SIZE(gl_features); i++)
++        {
++            GstPluginFeature *feature = gst_registry_lookup_feature(registry, gl_features[i]);
++            if (feature)
++            {
++                gst_plugin_feature_set_rank(feature, 0);
++                gst_object_unref(feature);
++            }
++        }
+     }
  
+     return STATUS_SUCCESS;
