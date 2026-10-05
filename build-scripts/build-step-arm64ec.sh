@@ -66,53 +66,6 @@ export GSTREAMER_LIBS="-L$deps/lib -lgstgl-1.0 -lgstapp-1.0 -lgstvideo-1.0 -lgst
 export FFMPEG_CFLAGS="-I$deps/include/libavutil -I$deps/include/libavcodec -I$deps/include/libavformat"
 export FFMPEG_LIBS="-L$deps/lib -lavutil -lavcodec -lavformat"
 
-# Generate a minimal prefixPack.txz from scratch (no external download).
-# It holds only the drive_c skeleton and header-only stub registry hives.
-# There is deliberately NO .update-timestamp, so on first launch wineboot
-# runs, applies THIS build's share/wine/wine.inf and rebuilds the registry
-# (Wow64 FEX keys, fonts, etc. all come from the fresh build).
-# The stub hives are needed because the app edits user.reg/system.reg before
-# Wine's first start and its editor does not write the "WINE REGISTRY" header.
-generate_prefix_pack() {
-  local out="$1" root w
-  root="$(mktemp -d)"
-  w="$root/.wine"
-  mkdir -p "$w/dosdevices" \
-           "$w/drive_c/windows" \
-           "$w/drive_c/Program Files" \
-           "$w/drive_c/Program Files (x86)" \
-           "$w/drive_c/ProgramData" \
-           "$w/drive_c/users/Public" \
-           "$w/drive_c/users/xuser"
-  ln -s ../drive_c "$w/dosdevices/c:"
-
-  cat > "$w/system.reg" <<'REG'
-WINE REGISTRY Version 2
-;; All keys relative to REGISTRY\\Machine
-
-#arch=win64
-
-REG
-  cat > "$w/user.reg" <<'REG'
-WINE REGISTRY Version 2
-;; All keys relative to REGISTRY\\User\\S-1-5-21-0-0-0-1000
-
-#arch=win64
-
-REG
-  cat > "$w/userdef.reg" <<'REG'
-WINE REGISTRY Version 2
-;; All keys relative to REGISTRY\\User\\.Default
-
-#arch=win64
-
-REG
-
-  tar -C "$root" --owner=0 --group=0 --numeric-owner --sort=name -cJf "$out" .wine
-  rm -rf "$root"
-  echo "Generated prefixPack: $out ($(du -k "$out" | cut -f1)KB)"
-}
-
 # Per-argument actions
 for arg in "$@"; do
   case "$arg" in
@@ -360,28 +313,28 @@ for arg in "$@"; do
         exit 1
       fi
 
-      # wineboot rebuilds the registry from share/wine/wine.inf on first launch
-      # (the prefix pack ships no registry), so the package is useless without it.
-      if [ ! -f "$OUTPUT_DIR/share/wine/wine.inf" ]; then
-        echo "ERROR: $OUTPUT_DIR/share/wine/wine.inf missing; the prefix would stay empty." >&2
-        exit 1
-      fi
-      for f in wineboot.exe rundll32.exe; do
-        if [ ! -f "$OUTPUT_DIR/lib/wine/aarch64-windows/$f" ]; then
-          echo "ERROR: lib/wine/aarch64-windows/$f missing; wineboot cannot initialise the prefix." >&2
-          exit 1
-        fi
-      done
-
       cp -a "$OUTPUT_DIR/bin" "$OUTPUT_DIR/lib" "$OUTPUT_DIR/share" "$STAGING/"
 
-      # Prefix: generated fresh on every packaging run. WCP_PREFIX_PACK can
-      # still point at a ready-made .txz to override (escape hatch).
+      if [ -z "$WCP_PREFIX_PACK" ] && [ -f "$PROJECT_ROOT/android/prefixPack-$ARCH_NAME.txz" ]; then
+        WCP_PREFIX_PACK="$PROJECT_ROOT/android/prefixPack-$ARCH_NAME.txz"
+      fi
+      if [ -z "$WCP_PREFIX_PACK" ]; then
+        PREFIX_PACK_URL="https://github.com/GameNative/bionic-prefix-files/raw/main/prefixPack-$ARCH_NAME-11.txz"
+        echo "Downloading prefixPack from $PREFIX_PACK_URL ..."
+        if wget -q -O "$PROJECT_ROOT/android/prefixPack-$ARCH_NAME.txz" "$PREFIX_PACK_URL"; then
+          WCP_PREFIX_PACK="$PROJECT_ROOT/android/prefixPack-$ARCH_NAME.txz"
+        else
+          rm -f "$PROJECT_ROOT/android/prefixPack-$ARCH_NAME.txz"
+          echo "Warning: prefixPack download failed."
+        fi
+      fi
       if [ -n "$WCP_PREFIX_PACK" ] && [ -f "$WCP_PREFIX_PACK" ]; then
-        echo "Using provided prefixPack: $WCP_PREFIX_PACK"
         cp "$WCP_PREFIX_PACK" "$STAGING/prefixPack.txz"
       else
-        generate_prefix_pack "$STAGING/prefixPack.txz"
+        echo "Note: no prefixPack.txz found; packaging an empty one (GameNative will create the prefix on first launch)."
+        mkdir -p "$STAGING/empty-prefix"
+        tar -C "$STAGING/empty-prefix" -cJf "$STAGING/prefixPack.txz" --files-from /dev/null
+        rm -rf "$STAGING/empty-prefix"
       fi
 
       cat > "$STAGING/profile.json" <<EOF

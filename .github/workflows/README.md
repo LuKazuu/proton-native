@@ -31,9 +31,8 @@ A single `.wcp` artifact:
 
 - `proton-11.0-arm64ec.wcp`
 
-The `.wcp` is a zstd-compressed tar. The contained `prefixPack.txz` is generated
-during `--package-wcp` (minimal skeleton, registry rebuilt by `wineboot` from
-this build's `wine.inf` on first launch). No `bionic-prefix-files` download.
+The `.wcp` is an uncompressed tar. The contained `prefixPack.txz` is
+xz-compressed (pre-built payload from `GameNative/bionic-prefix-files`).
 
 ## Caching
 

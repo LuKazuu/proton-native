@@ -180,10 +180,15 @@ jobs:
           OUTPUT_DIR: ${{ github.workspace }}/compiled-files-${{ matrix.arch }}
         run: bash build-scripts/build-step-arm64ec.sh --install
 
+      - name: Download prefixPack.txz for ${{ matrix.arch }}
+        run: |
+          wget -q https://github.com/GameNative/bionic-prefix-files/raw/main/prefixPack-arm64ec-11.txz -O $GITHUB_WORKSPACE/prefixPack.txz
+
       - name: Package .wcp for ${{ matrix.arch }}
         working-directory: wine-src
         env:
           OUTPUT_DIR: ${{ github.workspace }}/compiled-files-${{ matrix.arch }}
+          WCP_PREFIX_PACK: ${{ github.workspace }}/prefixPack.txz
         run: |
           bash build-scripts/build-step-arm64ec.sh --package-wcp
           ls -lh $GITHUB_WORKSPACE/proton-11.0-*.wcp
@@ -247,9 +252,8 @@ jobs:
 
             ## Packaging
             Zstd-compressed tar `.wcp` (fast in-app install). The inner
-            `prefixPack.txz` is generated in CI on every build (minimal
-            skeleton; the registry is rebuilt from this build's `wine.inf` on
-            first launch).
+            `prefixPack.txz` is xz-compressed (pre-built payload from
+            `GameNative/bionic-prefix-files`).
 
             ## WCP Files
             - `proton-11.0-arm64ec.wcp` — for GameNative / Winlator
