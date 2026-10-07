@@ -188,6 +188,9 @@ for arg in "$@"; do
 
         # winedmo: ffmpeg API compat fix
         "common/dlls_winedmo_ffmpeg_compat.patch"
+        # Must stay AFTER ffmpeg_compat (built on top of it)
+        "common/strip-protonmediaconverter.patch"
+        "common/wmvcore-reinit-stream-order.patch"
 
         # winex11 driver
         "common/dlls_winex11_drv_bitblt_c.patch"

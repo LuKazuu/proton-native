@@ -1,0 +1,18 @@
+--- a/dlls/winegstreamer/wm_reader.c
++++ b/dlls/winegstreamer/wm_reader.c
+@@ -1744,7 +1744,14 @@
+         struct wm_stream *stream = &reader->streams[i];
+         struct wg_format format;
+ 
+-        stream->wg_stream = wg_parser_get_stream(reader->wg_parser, reader->stream_count - i - 1);
++        /* Keep the same stream order as wm_reader_open(). wg_parser_buffer.stream
++         * is the parser's own stream index, and wm_reader_read_stream_sample()
++         * uses it directly as an index into reader->streams[]. Reversing the
++         * order here swaps the audio and video streams whenever the parser
++         * exposes its pads in the same order as on the first connection, which
++         * makes wg_parser_stream_copy_buffer() fail on the wrong stream and
++         * IWMSyncReader::GetNextSample() spin forever (black video). */
++        stream->wg_stream = wg_parser_get_stream(reader->wg_parser, i);
+         stream->reader = reader;
+         wg_parser_stream_get_current_format(stream->wg_stream, &format);
+         if (stream->selection == WMT_ON)
